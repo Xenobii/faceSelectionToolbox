@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { OrbitControls } from "jsm/controls/OrbitControls.js";
 import { Pane } from "tweakpane";
 
+import Toolbox from "./toolbox/toolbox.js";
+
 
 function main() {
     setupScene();
@@ -51,6 +53,9 @@ function setupScene() {
     // Mesh
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
+
+    // Toolbox
+    Toolbox.prepareforSelection(mesh, renderer, camera);
 
     // Render Scene
     function animate(t=0) {
