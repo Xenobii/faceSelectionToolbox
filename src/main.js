@@ -4,7 +4,6 @@ import { Pane } from "tweakpane";
 import Stats from "stats.js"
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree, MeshBVHHelper} from 'three-mesh-bvh';
 
-import Toolbox from "./toolbox/toolbox.js";
 import Tools from "./toolbox/toolbox.js"
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
@@ -47,7 +46,7 @@ function init() {
     const radialSegments = 100;
 
     const knotGeometry = new THREE.TorusKnotGeometry(radius, tube, tubularSegments, radialSegments);
-    const material = new THREE.MeshStandardMaterial({
+    const material = new THREE.MeshLambertMaterial({
         color: 0x909090,
         // flatshading: true,
     })

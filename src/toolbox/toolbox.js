@@ -26,35 +26,40 @@ class Tools {
         this.renderer = renderer;
         this.mesh     = mesh;
 
+        if (optParams) {
+            if (optParams.layer) this.rcLayer = optParams.layer; 
+        }
+
         this._screenPointerCoords = new THREE.Vector2(0.0, 0.0);
 
         this._bPauseQuery  = false;
         this._bInitialized = false;
 
-        this.init();
+        this.initRC();
+        this.initMeshMat();
+        this.initEventListeners();
     }
     
-    init() {
+    initRC() {
         this.raycaster = new THREE.Raycaster();
+        // this.raycaster.layers.set()
         this.raycaster.firstHitOnly = true;
         
         if (!this.mesh.geometry.boundsTree) {
             console.log("No bounds tree, computing bounds tree");
             this.mesh.geometry.computeBoundsTree();
         }
-        this.initMeshMat();
-        this.initEventListeners();
     }
 
     initEventListeners() {
         let el = this.renderer.domElement;
 
-        el.addEventListener('mousemove', this._updateScreenMove, false);
-        el.addEventListener('mousemove', this._query, false);
+        el.addEventListener('mousemove', (e) => this._updateScreenMove(e), false);
+        el.addEventListener('mousemove', () => this._query(), false);
     }
 
     initMeshMat() {
-        this.mesh.material.vertexColors = true;
+        // this.mesh.material.vertexColors = true;
         this.mesh.material.needsUpdate  = true;
 
         if (!this.mesh.geometry.attributes.color) {
@@ -67,13 +72,21 @@ class Tools {
         }
     }
 
+    _updateScreenMove(e) {
+        if (e.preventDefault) e.preventDefault();
+
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        this._screenPointerCoords.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        this._screenPointerCoords.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
     _query() {
-        if (!this._bPauseQuery) return;
+        if (this._bPauseQuery) return;
 
         this._hits = [];
 
         this.raycaster.setFromCamera(this._screenPointerCoords, this.camera);
-        this.raycaster.intersectObject(this.scene.children, true, this._hits);
+        this.raycaster.intersectObject(this.mesh, true, this._hits);
 
         let hitsnum = this._hits.length;
         if (hitsnum <= 0) {
@@ -88,14 +101,6 @@ class Tools {
         this._queryData.o = h.object;
 
         // Compute normals
-        console.log(this._queryData)
-    }
-
-    _updateScreenMove(e) {
-        if (e.preventDefault) e.preventDefault();
-
-        this._screenPointerCoords.x = ( e.clientX / window.innerWidth ) * 2 - 1;
-        this._screenPointerCoords.y = ( e.clientY / window.innerHeight ) * 2 - 1;
     }
 
     brush() {
