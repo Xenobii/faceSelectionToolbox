@@ -4,7 +4,7 @@ import { Pane } from "tweakpane";
 import Stats from "stats.js"
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree, MeshBVHHelper} from 'three-mesh-bvh';
 
-import Tools from "./toolbox/toolbox.js"
+import { Tools, Brush } from "./toolbox/toolbox.js"
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -19,6 +19,7 @@ let params = {
 let stats;
 let scene, camera, renderer, controls, boundsViz;
 let mesh;
+let brush;
 
 
 function init() {
@@ -67,7 +68,11 @@ function init() {
     stats = new Stats();
     document.body.appendChild(stats.dom);
 
-    const tools = new Tools(scene, camera, renderer, mesh);
+    // Tools
+    brush = new Brush(scene, camera, renderer, mesh);
+    brush.deactivate();
+    brush.onStrokeEnd((faces) => {
+    })
 };
 
 function setupEventHandlers() {
@@ -102,7 +107,8 @@ function setupUI() {
         title: 'Brush',
     });
     btnBrush.on('click', () => {
-        // What it does
+        brush.activate();
+        controls.enabled = false;
     });
 
     // Eraser Button
@@ -119,6 +125,14 @@ function setupUI() {
     });
     btnLasso.on('click', () => {
         // What it does
+    });
+
+    // None Button
+    const btnNone = toolboxPane.addButton({
+        title: 'None',
+    });
+    btnNone.on('click', () => {
+        controls.enabled = true;
     });
 };
 

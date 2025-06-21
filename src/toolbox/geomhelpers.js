@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import Utils from "./utils.js";
+
 
 
 let GeometryHelpers = {};
@@ -63,9 +65,9 @@ GeometryHelpers.extractFaceData = (faceIndex, geometry, getVertices = false) => 
             ];
         }
     
-        Toolbox.Utils.setVectorPrecision(face.vertices[0], GeometryHelpers.FLOAT_PREC);
-        Toolbox.Utils.setVectorPrecision(face.vertices[1], GeometryHelpers.FLOAT_PREC);
-        Toolbox.Utils.setVectorPrecision(face.vertices[2], GeometryHelpers.FLOAT_PREC);
+        Utils.setVectorPrecision(face.vertices[0], GeometryHelpers.FLOAT_PREC);
+        Utils.setVectorPrecision(face.vertices[1], GeometryHelpers.FLOAT_PREC);
+        Utils.setVectorPrecision(face.vertices[2], GeometryHelpers.FLOAT_PREC);
     }
 
     return face;
