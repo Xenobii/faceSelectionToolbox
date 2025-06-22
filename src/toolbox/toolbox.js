@@ -17,10 +17,6 @@ THREE.Mesh.prototype.raycast = acceleratedRaycast;
 import Utils from "./utils.js";
 import GeometryHelpers from "./geomhelpers.js";
 
-const Toolbox = {
-    Utils,
-    GeometryHelpers
-};
 
 class Tools {
     constructor(scene, camera, renderer, mesh, optParams) {
@@ -63,7 +59,7 @@ class Tools {
         let el = this.renderer.domElement;
 
         el.addEventListener('mousemove', (e) => this._updateScreenMove(e), false);
-        el.addEventListener('mousemove', () => this._query(), false);
+        el.addEventListener('mousemove', ()  => this._query(), false);
     }
 
     initMeshMat() {
@@ -71,7 +67,6 @@ class Tools {
         this.mesh.material.needsUpdate  = true;
 
         if (!this.mesh.geometry.attributes.color) {
-            // console.log("Initializing color");
             let colorArray, colorAttr;
             colorArray = new Float32Array(this.mesh.geometry.attributes.position.count * 3);
 
@@ -174,11 +169,16 @@ class Tools {
 class Brush extends Tools {
     constructor(scene, camera, renderer, mesh, optParams) {
         super(scene, camera, renderer, mesh, optParams)
-        
-        this.initBrushEventListeners();
-        this.initSelector();
 
-        this.selectorSize = 0.5;
+        if (!optParams) optParams = {};
+        this.selectorColor = optParams.selectorColor ?? 0xffffff;
+        
+        this.selectorSize   = 1;
+        this.selectorRadius = this._computeRadius(this.selectorSize);
+        
+        this.initSelector();
+        this.initBrushEventListeners();
+
         this.tempSelection = new Set();
 
         this.selectorMesh.visible = false;
@@ -187,6 +187,11 @@ class Brush extends Tools {
 
     initBrushEventListeners() {
         let el = this.renderer.domElement;
+        let w  = window;
+
+        el.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        })
 
         el.addEventListener('mousedown', (e) => {
             if (this.enabled) {
@@ -194,35 +199,52 @@ class Brush extends Tools {
                     this._bLeftMouseDown = true;
                     this._brushActive();
                 }
+                if (e.button === 2) {
+                    this._bRightMouseDown = true;
+                    this._eraserActive();
+                }
             }
         }, false);
         el.addEventListener('mouseup', (e) => {
             if (this.enabled) {
-                if (e.button === 0) {
-                    this._bLeftMouseDown = false;
+                if (e.button === 0 || e.button === 2) {
+                    this._bLeftMouseDown  = false;
+                    this._bRightMouseDown = false;
     
                     if (this._onStrokeEndCallback) {
                         this._onStrokeEndCallback([...this.tempSelection]);
                     }
-    
-                    this.tempSelection.clear();
                 }
             }
-        }, false)
+        }, false);
         el.addEventListener('mousemove', () => {
             if (this.enabled) {
                 this._moveSelector();
                 if (this._bLeftMouseDown === true) {
                     this._brushActive();
                 }
+                if (this._bRightMouseDown === true) {
+                    this._eraserActive();
+                }
             }
-        })
+        }, false);
+
+        w.addEventListener('keydown', (k) => {
+            if (this.enabled) {
+                if (k.key === '[') {
+                    this.decreaseSelectorSize();
+                }
+                if (k.key === ']') {
+                    this.increaseSelectorSize();
+                }
+            }
+        }, false);
     }
 
     initSelector() {
-        this.selectorGeometry = new THREE.SphereGeometry(0.5, 32, 16);
+        this.selectorGeometry = new THREE.SphereGeometry(1, 32, 16);
         this.selectorMaterial = new THREE.MeshStandardMaterial({
-            color:0x00ff00,
+            color:0xffffff,
             roughness: 0.75,
             metalness: 0,
             transparent: true,
@@ -233,6 +255,7 @@ class Brush extends Tools {
         });
         this.selectorMesh = new THREE.Mesh(this.selectorGeometry, this.selectorMaterial);
         this.selectorMesh.visible = false;
+        this.selectorMesh.scale.setScalar(this.selectorRadius);
         this.scene.add(this.selectorMesh);
     }
 
@@ -254,7 +277,7 @@ class Brush extends Tools {
 
         const sphere = new THREE.Sphere();
         sphere.center.copy(this.selectorMesh.position).applyMatrix4(inverseMatrix);
-        sphere.radius = this.selectorSize;
+        sphere.radius = this.selectorRadius;
 
         const faces   = [];
         const tempVec = new THREE.Vector3();
@@ -301,10 +324,45 @@ class Brush extends Tools {
         if (!newFaces.length) return false;
 
         const newFacesSet = new Set(newFaces);
-        newFacesSet.forEach(f => this.tempSelection.add(f));
+        newFacesSet.forEach(f => {
+            if (!this.tempSelection.has(f)) {
+                this.tempSelection.add(f);
+            }
+        });
 
         this._clearHighlights();
         this._highlightFacesOnMesh(this.tempSelection);
+    }
+
+    _eraserActive() {
+        const newFaces = this._selectMultipleFaces();
+        if (!newFaces.length) return false;
+
+        const newFacesSet = new Set(newFaces);
+        newFacesSet.forEach(f => {
+            if (this.tempSelection.has(f)) {
+                this.tempSelection.delete(f);
+            }
+        });
+
+        this._clearHighlights();
+        this._highlightFacesOnMesh(this.tempSelection);
+    }
+
+    _computeRadius(r) {
+        return (0.25 * 1.2**r);
+    }
+
+    increaseSelectorSize() {
+        this.selectorSize += 1;
+        this.selectorRadius = this._computeRadius(this.selectorSize);
+        this.selectorMesh.scale.setScalar(this.selectorRadius);
+    }
+
+    decreaseSelectorSize() {
+        this.selectorSize -= 1;
+        this.selectorRadius = this._computeRadius(this.selectorSize);
+        this.selectorMesh.scale.setScalar(this.selectorRadius);
     }
 
     onStrokeEnd(callback) {

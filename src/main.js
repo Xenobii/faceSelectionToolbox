@@ -72,6 +72,7 @@ function init() {
     brush = new Brush(scene, camera, renderer, mesh);
     brush.deactivate();
     brush.onStrokeEnd((faces) => {
+        console.log(faces.length);
     })
 };
 
