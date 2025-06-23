@@ -72,11 +72,14 @@ function init() {
     brush = new Brush(scene, camera, renderer, mesh);
     brush.deactivate();
     brush.onStrokeEnd((faces) => {
-        console.log(faces.length);
+        console.log(faces);
     })
 
     lasso = new Lasso(scene, camera, renderer, mesh);
     lasso.deactivate();
+    lasso.onSelectionEnd((faces) => {
+        console.log(faces.length);
+    })
 };
 
 function setupEventHandlers() {

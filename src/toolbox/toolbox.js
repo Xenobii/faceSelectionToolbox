@@ -37,7 +37,7 @@ class Tools {
         this.initMeshMat();
         this.initEventListeners();
 
-        this.tempSelection = new Set();
+        this.currSelection = new Set();
 
         this._bInitialized = true;
 
@@ -57,6 +57,13 @@ class Tools {
 
     initEventListeners() {
         let el = this.renderer.domElement;
+        let w = window;
+
+        el.addEventListener('resize', () => {
+            this.camera.aspect = w.innerWidth / w.innerHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(w.innerWidth, w.innerHeight);
+        }, false)
 
         el.addEventListener('mousemove', (e) => this._updateScreenMove(e), false);
         el.addEventListener('mousemove', ()  => this._query(), false);
@@ -116,8 +123,6 @@ class Tools {
         this._queryData.p = h.point;
         this._queryData.d = h.distance;
         this._queryData.o = h.object;
-
-        // Compute normals
     }
 
     _clearHighlights() {
@@ -165,6 +170,17 @@ class Tools {
         return;
     }
 
+    _filterNewUniqueFaces(selectedFaces) {
+        if (!selectedFaces.length) return;
+        
+        const newFacesSet = new Set(selectedFaces);
+        newFacesSet.forEach(f => {
+            if (!this.currSelection.has(f)) {
+                this.currSelection.add(f);
+            }
+        });
+    }
+
     activate() {
         this.enabled = true;
     }
@@ -201,20 +217,22 @@ class Brush extends Tools {
 
         el.addEventListener('mousedown', (e) => {
             if (!this.enabled) return;
+            
             if (e.button === 0) this._brushActive();
             if (e.button === 2) this._eraserActive();
         }, false);
         el.addEventListener('mouseup', (e) => {
             if (!this.enabled) return;
-            
+
             if (e.button === 0 || e.button === 2) {
                 if (this._onStrokeEndCallback) {
-                    this._onStrokeEndCallback([...this.tempSelection]);
+                    this._onStrokeEndCallback([...this.currSelection]);
                 }
             }
         }, false);
         el.addEventListener('mousemove', () => {
             if (!this.enabled) return;
+
             this._moveSelector();
             if (this._bLeftMouseDown === true) this._brushActive();
             if (this._bRightMouseDown === true) this._eraserActive();
@@ -247,9 +265,11 @@ class Brush extends Tools {
 
     _moveSelector() {
         if (this._queryData === undefined) {
+            this.renderer.domElement.style.cursor = 'default';
             this.selectorMesh.visible = false;
             return false;
         }
+        this.renderer.domElement.style.cursor = 'none';
         this.selectorMesh.visible = true;
         this.selectorMesh.position.copy(this._queryData.p);
     }
@@ -307,17 +327,9 @@ class Brush extends Tools {
 
     _brushActive() {
         const newFaces = this._selectMultipleFaces();
-        if (!newFaces.length) return false;
-
-        const newFacesSet = new Set(newFaces);
-        newFacesSet.forEach(f => {
-            if (!this.tempSelection.has(f)) {
-                this.tempSelection.add(f);
-            }
-        });
-
+        this._filterNewUniqueFaces(newFaces);
         this._clearHighlights();
-        this._highlightFacesOnMesh(this.tempSelection);
+        this._highlightFacesOnMesh(this.currSelection);
     }
 
     _eraserActive() {
@@ -326,13 +338,13 @@ class Brush extends Tools {
 
         const newFacesSet = new Set(newFaces);
         newFacesSet.forEach(f => {
-            if (this.tempSelection.has(f)) {
-                this.tempSelection.delete(f);
+            if (this.currSelection.has(f)) {
+                this.currSelection.delete(f);
             }
         });
 
         this._clearHighlights();
-        this._highlightFacesOnMesh(this.tempSelection);
+        this._highlightFacesOnMesh(this.currSelection);
     }
 
     _computeRadius(r) {
@@ -366,6 +378,8 @@ class Lasso extends Tools {
         
         this.initLasso();
         this.initLassoEventListeners();
+
+        this._onSelectionEndCallback = null;
     }
 
     initLassoEventListeners() {
@@ -375,7 +389,8 @@ class Lasso extends Tools {
         w.addEventListener('resize', () => this._resizeLassoCanvas(), false);
 
         el.addEventListener('mousedown', (e) => {
-            if (!this.enabled) return; 
+            if (!this.enabled) return;
+            el.style.cursor = 'crosshair';
             if (e.button === 0) this._startLasso();
         })
         el.addEventListener('mousemove', (e) => {
@@ -385,8 +400,13 @@ class Lasso extends Tools {
         })
         el.addEventListener('mouseup', (e) => {
             if (!this.enabled) return;
+
             if (e.button === 0) {
+                el.style.cursor = 'default';
                 this._endLasso();
+                if (this._onSelectionEndCallback) {
+                    this._onSelectionEndCallback([...this.currSelection]);
+                }
             }
         })
     }
@@ -394,6 +414,7 @@ class Lasso extends Tools {
     initLasso() {
         this._createLassoCanvas();
         this._resizeLassoCanvas();
+        this.lassoPoints = [];
         this._lassoIsActive = false;
     }
 
@@ -435,20 +456,28 @@ class Lasso extends Tools {
 
         this.lassoCtx.strokeStyle = this.lassoColor;
         this.lassoCtx.lineWidth   = this.lassoWidth;
+        
+        this._cleanupLasso();
     }
 
     _cleanupLasso() {
         if (!this.lassoCtx) return;
-        this._lassoIsActive = false;
         this.lassoCtx.clearRect(0, 0, 
             this.lassoCtx.canvas.width,
             this.lassoCtx.canvas.height
         );
+        this._lassoIsActive = false;
     }
 
     _startLasso() {
         if (!this.enabled) return;
+        
+        this._resizeLassoCanvas()
+        
         this._lassoIsActive = true;
+        
+        this.lassoPoints = [this._pixelPointerCoords];
+
         this.lassoCtx.beginPath();
         this.lassoCtx.moveTo(
             this._pixelPointerCoords.x,
@@ -458,14 +487,110 @@ class Lasso extends Tools {
     
     _updateLasso() {
         if (!this._lassoIsActive) return;
+        
+        this.lassoPoints.push(this._pixelPointerCoords);
+        
         this.lassoCtx.lineTo(this._pixelPointerCoords.x, this._pixelPointerCoords.y)
         this.lassoCtx.stroke();
     }
 
     _endLasso() {
-        if (!this._lassoIsActive) return;
+        const newFaces = this._processLassoSelection();
+        this._filterNewUniqueFaces(newFaces);
+        this._clearHighlights();
+        this._highlightFacesOnMesh(this.currSelection);
         this._cleanupLasso();
+        this._lassoIsActive = false;
     }
+
+    _processLassoSelection() {
+        if (!this.lassoPoints || this.lassoPoints.length < 3) return;
+
+        const geometry = this.mesh.geometry;
+        const camera   = this.camera;
+        const width    = this.canvas.width;
+        const height   = this.canvas.height;
+        const dpr      = window.devicePixelRatio || 1;
+
+        const posAttr   = geometry.attributes.position;
+        const normAttr  = geometry.attributes.normal;
+        const indexAttr = geometry.index;
+
+        const faceCount = indexAttr ? indexAttr.count / 3 : positionAttr.count / 9;
+        
+        const v1 = new THREE.Vector3();
+        const v2 = new THREE.Vector3();
+        const v3 = new THREE.Vector3();
+        const n1 = new THREE.Vector3();
+        const n2 = new THREE.Vector3();
+        const n3 = new THREE.Vector3();
+
+        const faceNormal    = new THREE.Vector3();
+        const centroid      = new THREE.Vector3();
+
+        const camDir    = new THREE.Vector3();
+        const projected = new THREE.Vector3();
+
+        const selectedFaces = [];
+
+        for (let i=0; i<faceCount; i++) {
+            let a, b, c;
+            if (indexAttr) {
+                a = indexAttr.getX(i * 3);
+                b = indexAttr.getX(i * 3 + 1);
+                c = indexAttr.getX(i * 3 + 2);
+            } else {
+                a = i * 3;
+                b = i * 3 + 1;
+                c = i * 3 + 2;
+            }
+            v1.fromBufferAttribute(posAttr, a);
+            v2.fromBufferAttribute(posAttr, b);
+            v3.fromBufferAttribute(posAttr, c);
+
+            n1.fromBufferAttribute(normAttr, a);
+            n2.fromBufferAttribute(normAttr, b);
+            n3.fromBufferAttribute(normAttr, c);
+            
+            faceNormal.copy(n1).add(n2).add(n3).divideScalar(3).normalize();
+            centroid.copy(v1).add(v2).add(v3).divideScalar(3);
+            
+            camDir.subVectors(this.camera.position, centroid).normalize();
+
+            if (faceNormal.dot(camDir) <= 0.1) continue;
+            
+            projected.copy(centroid).project(camera);
+            
+            const x = ((projected.x + 1) / 2) * width / dpr;
+            const y = ((-projected.y + 1) / 2) * height / dpr;
+
+            if (this._isPointInPolygon({x, y}, this.lassoPoints)) {
+                selectedFaces.push(i);
+            };
+        }
+        return selectedFaces;
+    }
+
+    _isPointInPolygon(point, polygon) {
+        let inside = false;
+        const { x, y } = point;
+
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            const xi = polygon[i].x, yi = polygon[i].y;
+            const xj = polygon[j].x, yj = polygon[j].y;
+
+            const intersect = ((yi > y) !== (yj > y)) &&
+                (x < (xj - xi) * (y - yi) / (yj - yi + 1e-10) + xi);
+
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    onSelectionEnd(callback) {
+        this._onSelectionEndCallback = callback;
+    }
+
 };
 
 export {Tools, Brush, Lasso};
