@@ -4,7 +4,7 @@ import { Pane } from "tweakpane";
 import Stats from "stats.js"
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree, MeshBVHHelper} from 'three-mesh-bvh';
 
-import { Tools, Brush } from "./toolbox/toolbox.js"
+import { Brush, Lasso } from "./toolbox/toolbox.js"
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -19,7 +19,7 @@ let params = {
 let stats;
 let scene, camera, renderer, controls, boundsViz;
 let mesh;
-let brush;
+let brush, lasso;
 
 
 function init() {
@@ -74,6 +74,9 @@ function init() {
     brush.onStrokeEnd((faces) => {
         console.log(faces.length);
     })
+
+    lasso = new Lasso(scene, camera, renderer, mesh);
+    lasso.deactivate();
 };
 
 function setupEventHandlers() {
@@ -108,6 +111,7 @@ function setupUI() {
         title: 'Brush',
     });
     btnBrush.on('click', () => {
+        lasso.deactivate();
         brush.activate();
         controls.enabled = false;
     });
@@ -125,7 +129,9 @@ function setupUI() {
         title: 'Lasso',
     });
     btnLasso.on('click', () => {
-        // What it does
+        brush.deactivate();
+        lasso.activate();
+        controls.enabled = false;
     });
 
     // None Button
@@ -133,6 +139,8 @@ function setupUI() {
         title: 'None',
     });
     btnNone.on('click', () => {
+        brush.deactivate();
+        lasso.deactivate();
         controls.enabled = true;
     });
 };

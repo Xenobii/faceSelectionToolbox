@@ -8,12 +8,10 @@ import {
     NOT_INTERSECTED
 } from 'three-mesh-bvh';
 
-// Initialize THREE extensions once
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
-// Import and re-export Scene
 import Utils from "./utils.js";
 import GeometryHelpers from "./geomhelpers.js";
 
@@ -38,10 +36,12 @@ class Tools {
         this.initRC();
         this.initMeshMat();
         this.initEventListeners();
-        
+
+        this.tempSelection = new Set();
+
         this._bInitialized = true;
 
-        this.enable = false;
+        this.enabled = false;
     }
     
     initRC() {
@@ -60,7 +60,15 @@ class Tools {
 
         el.addEventListener('mousemove', (e) => this._updateScreenMove(e), false);
         el.addEventListener('mousemove', ()  => this._query(), false);
-    }
+
+        el.addEventListener('mousedown', (e) => {
+            if (e.button === 0) this._bLeftMouseDown = true;
+            if (e.button === 2) this._bRightMouseDown = true;
+        }, false);
+        el.addEventListener('mouseup', (e) => {
+            if (e.button === 0) this._bLeftMouseDown = false;
+            if (e.button === 2) this._bRightMouseDown = false;
+        }, false);    }
 
     initMeshMat() {
         this.mesh.material.vertexColors = true;
@@ -171,15 +179,13 @@ class Brush extends Tools {
         super(scene, camera, renderer, mesh, optParams)
 
         if (!optParams) optParams = {};
-        this.selectorColor = optParams.selectorColor ?? 0xffffff;
+        this.selectorMaterial = optParams.selectorMaterial ?? undefined;
         
         this.selectorSize   = 1;
         this.selectorRadius = this._computeRadius(this.selectorSize);
         
         this.initSelector();
         this.initBrushEventListeners();
-
-        this.tempSelection = new Set();
 
         this.selectorMesh.visible = false;
         this._onStrokeEndCallback = null;
@@ -194,56 +200,36 @@ class Brush extends Tools {
         })
 
         el.addEventListener('mousedown', (e) => {
-            if (this.enabled) {
-                if (e.button === 0) {
-                    this._bLeftMouseDown = true;
-                    this._brushActive();
-                }
-                if (e.button === 2) {
-                    this._bRightMouseDown = true;
-                    this._eraserActive();
-                }
-            }
+            if (!this.enabled) return;
+            if (e.button === 0) this._brushActive();
+            if (e.button === 2) this._eraserActive();
         }, false);
         el.addEventListener('mouseup', (e) => {
-            if (this.enabled) {
-                if (e.button === 0 || e.button === 2) {
-                    this._bLeftMouseDown  = false;
-                    this._bRightMouseDown = false;
-    
-                    if (this._onStrokeEndCallback) {
-                        this._onStrokeEndCallback([...this.tempSelection]);
-                    }
+            if (!this.enabled) return;
+            
+            if (e.button === 0 || e.button === 2) {
+                if (this._onStrokeEndCallback) {
+                    this._onStrokeEndCallback([...this.tempSelection]);
                 }
             }
         }, false);
         el.addEventListener('mousemove', () => {
-            if (this.enabled) {
-                this._moveSelector();
-                if (this._bLeftMouseDown === true) {
-                    this._brushActive();
-                }
-                if (this._bRightMouseDown === true) {
-                    this._eraserActive();
-                }
-            }
+            if (!this.enabled) return;
+            this._moveSelector();
+            if (this._bLeftMouseDown === true) this._brushActive();
+            if (this._bRightMouseDown === true) this._eraserActive();
         }, false);
 
         w.addEventListener('keydown', (k) => {
-            if (this.enabled) {
-                if (k.key === '[') {
-                    this.decreaseSelectorSize();
-                }
-                if (k.key === ']') {
-                    this.increaseSelectorSize();
-                }
-            }
+            if (!this.enabled) return; 
+            if (k.key === '[') this.decreaseSelectorSize();
+            if (k.key === ']') this.increaseSelectorSize();
         }, false);
     }
 
     initSelector() {
         this.selectorGeometry = new THREE.SphereGeometry(1, 32, 16);
-        this.selectorMaterial = new THREE.MeshStandardMaterial({
+        this.selectorMaterial = this.selectorMaterial ?? new THREE.MeshStandardMaterial({
             color:0xffffff,
             roughness: 0.75,
             metalness: 0,
@@ -254,8 +240,8 @@ class Brush extends Tools {
             emissiveIntensity: 0.5,
         });
         this.selectorMesh = new THREE.Mesh(this.selectorGeometry, this.selectorMaterial);
-        this.selectorMesh.visible = false;
         this.selectorMesh.scale.setScalar(this.selectorRadius);
+        this.selectorMesh.visible = false;
         this.scene.add(this.selectorMesh);
     }
 
@@ -368,7 +354,118 @@ class Brush extends Tools {
     onStrokeEnd(callback) {
         this._onStrokeEndCallback = callback;
     }
-}
+};
 
+class Lasso extends Tools {
+    constructor(scene, camera, renderer, mesh, optParams) {
+        super(scene, camera, renderer, mesh, optParams);
 
-export {Tools, Brush};
+        if (!optParams) optParams = {};
+        this.lassoColor = optParams.lassoColor ?? 'rgba(0, 255, 0, 0.7)';
+        this.lassoWidth = optParams.lassoWidth ?? 1;
+        
+        this.initLasso();
+        this.initLassoEventListeners();
+    }
+
+    initLassoEventListeners() {
+        let el = this.renderer.domElement;
+        let w = window;
+
+        w.addEventListener('resize', () => this._resizeLassoCanvas(), false);
+
+        el.addEventListener('mousedown', (e) => {
+            if (!this.enabled) return; 
+            if (e.button === 0) this._startLasso();
+        })
+        el.addEventListener('mousemove', (e) => {
+            if (!this.enabled) return;
+            this._updatePixelPointerCoords(e);
+            if (this._bLeftMouseDown === true) this._updateLasso();
+        })
+        el.addEventListener('mouseup', (e) => {
+            if (!this.enabled) return;
+            if (e.button === 0) {
+                this._endLasso();
+            }
+        })
+    }
+
+    initLasso() {
+        this._createLassoCanvas();
+        this._resizeLassoCanvas();
+        this._lassoIsActive = false;
+    }
+
+    _updatePixelPointerCoords(e) {
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        this._pixelPointerCoords = {
+            x: (e.clientX - rect.left),
+            y: (e.clientY - rect.top)
+        };
+    }
+
+    _createLassoCanvas() {
+        this.canvas = document.createElement('canvas');
+        this.canvas.id = 'lassoCanvas';
+        document.body.appendChild(this.canvas);
+
+        Object.assign(this.canvas.style, {
+            position: 'absolute',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none',
+            zIndex: '10'
+        });
+        this.lassoCtx = this.canvas.getContext('2d');
+    }
+
+    _resizeLassoCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+
+        this.canvas.width  = this.renderer.domElement.clientWidth * dpr;
+        this.canvas.height = this.renderer.domElement.clientHeight * dpr;
+
+        this.canvas.style.width  = this.renderer.domElement.clientWidth + 'px';
+        this.canvas.style.height = this.renderer.domElement.clientHeight + 'px';
+        
+        this.lassoCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        this.lassoCtx.strokeStyle = this.lassoColor;
+        this.lassoCtx.lineWidth   = this.lassoWidth;
+    }
+
+    _cleanupLasso() {
+        if (!this.lassoCtx) return;
+        this._lassoIsActive = false;
+        this.lassoCtx.clearRect(0, 0, 
+            this.lassoCtx.canvas.width,
+            this.lassoCtx.canvas.height
+        );
+    }
+
+    _startLasso() {
+        if (!this.enabled) return;
+        this._lassoIsActive = true;
+        this.lassoCtx.beginPath();
+        this.lassoCtx.moveTo(
+            this._pixelPointerCoords.x,
+            this._pixelPointerCoords.y
+        );
+    }
+    
+    _updateLasso() {
+        if (!this._lassoIsActive) return;
+        this.lassoCtx.lineTo(this._pixelPointerCoords.x, this._pixelPointerCoords.y)
+        this.lassoCtx.stroke();
+    }
+
+    _endLasso() {
+        if (!this._lassoIsActive) return;
+        this._cleanupLasso();
+    }
+};
+
+export {Tools, Brush, Lasso};
