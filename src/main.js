@@ -4,7 +4,7 @@ import { Pane } from "tweakpane";
 import Stats from "stats.js"
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree, MeshBVHHelper} from 'three-mesh-bvh';
 
-import { Brush, Lasso } from "./toolbox/toolbox.js"
+import { Brush, Lasso, Tools } from "./toolbox/toolbox.js"
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -68,18 +68,25 @@ function init() {
     stats = new Stats();
     document.body.appendChild(stats.dom);
 
+    const selectedFaces = [];
+
     // Tools
-    brush = new Brush(scene, camera, renderer, mesh);
+    const tools = new Tools(scene, camera, renderer, mesh);
+    brush = Tools.Brush();
     brush.deactivate();
     brush.onStrokeEnd((faces) => {
         console.log(faces);
+        selectedFaces = faces;
     })
+    brush._highlightFacesOnMesh(new Set(selectedFaces))
 
     lasso = new Lasso(scene, camera, renderer, mesh);
     lasso.deactivate();
     lasso.onSelectionEnd((faces) => {
-        console.log(faces.length);
+        console.log(faces.length);       
+        selectedFaces = faces;
     })
+    brush._highlightFacesOnMesh(new Set(selectedFaces))
 };
 
 function setupEventHandlers() {

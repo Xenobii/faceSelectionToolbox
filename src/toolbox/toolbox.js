@@ -13,7 +13,6 @@ THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 import Utils from "./utils.js";
-import GeometryHelpers from "./geomhelpers.js";
 
 
 class Tools {
@@ -75,7 +74,8 @@ class Tools {
         el.addEventListener('mouseup', (e) => {
             if (e.button === 0) this._bLeftMouseDown = false;
             if (e.button === 2) this._bRightMouseDown = false;
-        }, false);    }
+        }, false);    
+    }
 
     initMeshMat() {
         this.mesh.material.vertexColors = true;
@@ -137,6 +137,7 @@ class Tools {
     }
 
     _highlightFacesOnMesh(selectedFaces) {
+        if (selectedFaces === undefined) return;
         const colorAttr = this.mesh.geometry.attributes.color;
         const indexAttr = this.mesh.geometry.index;
 
@@ -170,13 +171,24 @@ class Tools {
         return;
     }
 
-    _filterNewUniqueFaces(selectedFaces) {
-        if (!selectedFaces.length) return;
+    _filterFacesAdd(selectedFaces) {
+        if (selectedFaces === undefined || !selectedFaces.length) return;
         
         const newFacesSet = new Set(selectedFaces);
         newFacesSet.forEach(f => {
             if (!this.currSelection.has(f)) {
                 this.currSelection.add(f);
+            }
+        });
+    }
+
+    _filterFacesDel(selectedFaces) {
+        if (selectedFaces === undefined || !selectedFaces.length) return;
+        
+        const newFacesSet = new Set(selectedFaces);
+        newFacesSet.forEach(f => {
+            if (this.currSelection.has(f)) {
+                this.currSelection.delete(f);
             }
         });
     }
@@ -327,22 +339,14 @@ class Brush extends Tools {
 
     _brushActive() {
         const newFaces = this._selectMultipleFaces();
-        this._filterNewUniqueFaces(newFaces);
+        this._filterFacesAdd(newFaces);
         this._clearHighlights();
         this._highlightFacesOnMesh(this.currSelection);
     }
 
     _eraserActive() {
         const newFaces = this._selectMultipleFaces();
-        if (!newFaces.length) return false;
-
-        const newFacesSet = new Set(newFaces);
-        newFacesSet.forEach(f => {
-            if (this.currSelection.has(f)) {
-                this.currSelection.delete(f);
-            }
-        });
-
+        this._filterFacesDel(newFaces);
         this._clearHighlights();
         this._highlightFacesOnMesh(this.currSelection);
     }
@@ -496,7 +500,7 @@ class Lasso extends Tools {
 
     _endLasso() {
         const newFaces = this._processLassoSelection();
-        this._filterNewUniqueFaces(newFaces);
+        this._filterFacesAdd(newFaces);
         this._clearHighlights();
         this._highlightFacesOnMesh(this.currSelection);
         this._cleanupLasso();
@@ -510,6 +514,7 @@ class Lasso extends Tools {
         const camera   = this.camera;
         const width    = this.canvas.width;
         const height   = this.canvas.height;
+        const lassoPts = this.lassoPoints;
         const dpr      = window.devicePixelRatio || 1;
 
         const posAttr   = geometry.attributes.position;
@@ -517,6 +522,12 @@ class Lasso extends Tools {
         const indexAttr = geometry.index;
 
         const faceCount = indexAttr ? indexAttr.count / 3 : positionAttr.count / 9;
+        const cameraPos = camera.getWorldPosition(new THREE.Vector3());
+
+        const mvpMatrix = new THREE.Matrix4()
+        .multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+        .multiply(this.mesh.matrixWorld);
+        const frustum = new THREE.Frustum().setFromProjectionMatrix(mvpMatrix);
         
         const v1 = new THREE.Vector3();
         const v2 = new THREE.Vector3();
@@ -525,12 +536,13 @@ class Lasso extends Tools {
         const n2 = new THREE.Vector3();
         const n3 = new THREE.Vector3();
 
-        const faceNormal    = new THREE.Vector3();
+        const normal    = new THREE.Vector3();
         const centroid      = new THREE.Vector3();
-
+        
         const camDir    = new THREE.Vector3();
+        const rayDir    = new THREE.Vector3();
         const projected = new THREE.Vector3();
-
+        
         const selectedFaces = [];
 
         for (let i=0; i<faceCount; i++) {
@@ -551,20 +563,38 @@ class Lasso extends Tools {
             n1.fromBufferAttribute(normAttr, a);
             n2.fromBufferAttribute(normAttr, b);
             n3.fromBufferAttribute(normAttr, c);
-            
-            faceNormal.copy(n1).add(n2).add(n3).divideScalar(3).normalize();
+
             centroid.copy(v1).add(v2).add(v3).divideScalar(3);
             
-            camDir.subVectors(this.camera.position, centroid).normalize();
-
-            if (faceNormal.dot(camDir) <= 0.1) continue;
+            // Filter faces out of camera frustum
             
+            if (!frustum.containsPoint(centroid)) continue;
+            
+            // Filter faces that aren't facing the camera
+            
+            normal.copy(n1).add(n2).add(n3).divideScalar(3).normalize();
+            rayDir.subVectors(centroid, cameraPos).normalize();
+            camDir.subVectors(cameraPos, centroid).normalize();
+            
+            if (normal.dot(camDir) <= 0.1) continue;
+            
+            // Filter faces that are obstructed by other faces
+            
+            const maxDist = cameraPos.distanceTo(centroid);
+            
+            const ray = new THREE.Ray(cameraPos, rayDir);
+            const hit = geometry.boundsTree.raycastFirst(ray, THREE.SingleSide);
+            
+            if (hit && hit.distance < maxDist - 0.01) continue;
+
+            // Project to lasso polygon
+
             projected.copy(centroid).project(camera);
             
             const x = ((projected.x + 1) / 2) * width / dpr;
             const y = ((-projected.y + 1) / 2) * height / dpr;
 
-            if (this._isPointInPolygon({x, y}, this.lassoPoints)) {
+            if (this._isPointInPolygon({x, y}, lassoPts)) {
                 selectedFaces.push(i);
             };
         }
@@ -592,5 +622,7 @@ class Lasso extends Tools {
     }
 
 };
+
+// make them nested under tools
 
 export {Tools, Brush, Lasso};
