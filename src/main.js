@@ -4,7 +4,7 @@ import { Pane } from "tweakpane";
 import Stats from "stats.js"
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree, MeshBVHHelper} from 'three-mesh-bvh';
 
-import { Brush, Lasso, Tools } from "./toolbox/toolbox.js"
+import { Lasso, Brush, Toolbox } from "./toolbox/toolbox.js"
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -20,6 +20,7 @@ let stats;
 let scene, camera, renderer, controls, boundsViz;
 let mesh;
 let brush, lasso;
+let toolbox;
 
 
 function init() {
@@ -71,22 +72,15 @@ function init() {
     const selectedFaces = [];
 
     // Tools
-    const tools = new Tools(scene, camera, renderer, mesh);
-    brush = Tools.Brush();
-    brush.deactivate();
-    brush.onStrokeEnd((faces) => {
-        console.log(faces);
-        selectedFaces = faces;
-    })
-    brush._highlightFacesOnMesh(new Set(selectedFaces))
+    toolbox = new Toolbox(scene, camera, renderer, mesh);
+    toolbox.deactivate();
+    toolbox.deactivateBrush();
+    toolbox.deactivateLasso();
 
-    lasso = new Lasso(scene, camera, renderer, mesh);
-    lasso.deactivate();
-    lasso.onSelectionEnd((faces) => {
-        console.log(faces.length);       
-        selectedFaces = faces;
-    })
-    brush._highlightFacesOnMesh(new Set(selectedFaces))
+    toolbox.onSelectionEnd((faces) => {
+        console.log(faces.length);
+    });
+
 };
 
 function setupEventHandlers() {
@@ -121,17 +115,9 @@ function setupUI() {
         title: 'Brush',
     });
     btnBrush.on('click', () => {
-        lasso.deactivate();
-        brush.activate();
+        toolbox.deactivateLasso();
+        toolbox.activateBrush();
         controls.enabled = false;
-    });
-
-    // Eraser Button
-    const btnEraser = toolboxPane.addButton({
-        title: 'Eraser',
-    });
-    btnEraser.on('click', () => {
-        // What it does
     });
 
     // Lasso Button
@@ -139,8 +125,8 @@ function setupUI() {
         title: 'Lasso',
     });
     btnLasso.on('click', () => {
-        brush.deactivate();
-        lasso.activate();
+        toolbox.deactivateBrush();
+        toolbox.activateLasso();
         controls.enabled = false;
     });
 
@@ -149,8 +135,8 @@ function setupUI() {
         title: 'None',
     });
     btnNone.on('click', () => {
-        brush.deactivate();
-        lasso.deactivate();
+        toolbox.deactivateBrush();
+        toolbox.deactivateLasso();
         controls.enabled = true;
     });
 };
