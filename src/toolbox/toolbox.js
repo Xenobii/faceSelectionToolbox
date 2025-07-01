@@ -379,6 +379,9 @@ class Lasso extends Tools {
         if (!optParams) optParams = {};
         this.lassoColor = optParams.lassoColor ?? 'rgba(0, 255, 0, 0.7)';
         this.lassoWidth = optParams.lassoWidth ?? 1;
+
+        this.normalThreshold       = optParams.normalThreshold       ?? 0; // [-1 , 1] 
+        this.selectObstructedFaces = optParams.selectObstructedFaces ?? false;
         
         this.initLasso();
         this.initLassoEventListeners();
@@ -395,19 +398,19 @@ class Lasso extends Tools {
         el.addEventListener('mousedown', (e) => {
             if (!this.enabled) return;
             el.style.cursor = 'crosshair';
-            if (e.button === 0) this._startLasso();
+            if (e.button === 0 || e.button === 2) this._startLasso();
         })
         el.addEventListener('mousemove', (e) => {
             if (!this.enabled) return;
             this._updatePixelPointerCoords(e);
-            if (this._bLeftMouseDown === true) this._updateLasso();
+            if (this._bLeftMouseDown === true || this._bRightMouseDown) this._updateLasso();
         })
         el.addEventListener('mouseup', (e) => {
             if (!this.enabled) return;
 
             if (e.button === 0) {
                 el.style.cursor = 'default';
-                this._endLasso();
+                this._endLassoAdd();
                 if (this._onSelectionEndCallback) {
                     this._onSelectionEndCallback([...this.currSelection]);
                 }
@@ -498,9 +501,18 @@ class Lasso extends Tools {
         this.lassoCtx.stroke();
     }
 
-    _endLasso() {
+    _endLassoAdd() {
         const newFaces = this._processLassoSelection();
         this._filterFacesAdd(newFaces);
+        this._clearHighlights();
+        this._highlightFacesOnMesh(this.currSelection);
+        this._cleanupLasso();
+        this._lassoIsActive = false;
+    }
+
+    _endlassoSub() {
+        const newFaces = this._processLassoSelection();
+        this._filterFacesDel(newFaces);
         this._clearHighlights();
         this._highlightFacesOnMesh(this.currSelection);
         this._cleanupLasso();
@@ -576,7 +588,7 @@ class Lasso extends Tools {
             rayDir.subVectors(centroid, cameraPos).normalize();
             camDir.subVectors(cameraPos, centroid).normalize();
             
-            if (normal.dot(camDir) <= 0.1) continue;
+            if (normal.dot(camDir) <= this.normalThreshold) continue;
             
             // Filter faces that are obstructed by other faces
             
@@ -638,6 +650,9 @@ class Toolbox {
         this.selectorMaterial = optParams.selectorMaterial ?? undefined;
         this.lassoColor       = optParams.lassoColor       ?? 'rgba(0, 255, 0, 0.7)';
         this.lassoWidth       = optParams.lassoWidth       ?? 1;
+
+        this.normalThreshold       = optParams.normalThreshold       ?? 0; // [-1 , 1] 
+        this.selectObstructedFaces = optParams.selectObstructedFaces ?? false;
         
         this.rcLayer = optParams.rcLayer;
 
@@ -751,19 +766,27 @@ class Toolbox {
         el.addEventListener('mousedown', (e) => {
             if (!this.lassoEnabled) return;
             el.style.cursor = 'crosshair';
-            if (e.button === 0) this._startLasso();
+            if (e.button === 0 || e.button === 2) this._startLasso();
         })
         el.addEventListener('mousemove', (e) => {
             if (!this.lassoEnabled) return;
             this._updatePixelPointerCoords(e);
-            if (this._bLeftMouseDown === true) this._updateLasso();
+            if (this._bLeftMouseDown || this._bRightMouseDown) this._updateLasso();
         })
         el.addEventListener('mouseup', (e) => {
             if (!this.lassoEnabled) return;
 
             if (e.button === 0) {
                 el.style.cursor = 'default';
-                this._endLasso();
+                this._endLassoAdd();
+                if (this._onSelectionEndCallback) {
+                    this._onSelectionEndCallback([...this.currSelection]);
+                }
+            }
+
+            if (e.button === 2) {
+                el.style.cursor = 'default';
+                this._endLassoSub();
                 if (this._onSelectionEndCallback) {
                     this._onSelectionEndCallback([...this.currSelection]);
                 }
@@ -1096,9 +1119,18 @@ class Toolbox {
         this.lassoCtx.stroke();
     }
 
-    _endLasso() {
+    _endLassoAdd() {
         const newFaces = this._processLassoSelection();
         this._filterFacesAdd(newFaces);
+        this._clearHighlights();
+        this._highlightFacesOnMesh(this.currSelection);
+        this._cleanupLasso();
+        this._lassoIsActive = false;
+    }
+
+    _endLassoSub() {
+        const newFaces = this._processLassoSelection();
+        this._filterFacesDel(newFaces);
         this._clearHighlights();
         this._highlightFacesOnMesh(this.currSelection);
         this._cleanupLasso();
@@ -1168,23 +1200,27 @@ class Toolbox {
             
             if (!frustum.containsPoint(centroid)) continue;
             
-            // Filter faces that aren't facing the camera
-            
-            normal.copy(n1).add(n2).add(n3).divideScalar(3).normalize();
-            rayDir.subVectors(centroid, cameraPos).normalize();
-            camDir.subVectors(cameraPos, centroid).normalize();
-            
-            if (normal.dot(camDir) <= 0.1) continue;
-            
             // Filter faces that are obstructed by other faces
+
+            if (this.selectObstructedFaces) {}
+                // TODO
             
             const maxDist = cameraPos.distanceTo(centroid);
+            
+            rayDir.subVectors(centroid, cameraPos).normalize();
             
             const ray = new THREE.Ray(cameraPos, rayDir);
             const hit = geometry.boundsTree.raycastFirst(ray, THREE.SingleSide);
             
             if (hit && hit.distance < maxDist - 0.01) continue;
 
+            // Filter faces that aren't facing the camera
+            
+            normal.copy(n1).add(n2).add(n3).divideScalar(3).normalize();
+            camDir.subVectors(cameraPos, centroid).normalize();
+            
+            if (normal.dot(camDir) <= this.normalThreshold) continue;
+            
             // Project to lasso polygon
 
             projected.copy(centroid).project(camera);
@@ -1263,6 +1299,6 @@ class Toolbox {
 // TODO undo redo (with enableHistory) -> a history tab for each layer
 // TODO import other models and geometries
 // TODO add adjustable lasso frustum thresholds
-// TODO add subtractive lasso with right click
+// TODO add normal thresholds to brush tool
 
 export {Brush, Lasso, Toolbox};
