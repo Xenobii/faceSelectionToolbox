@@ -582,23 +582,28 @@ class Lasso extends Tools {
             
             if (!frustum.containsPoint(centroid)) continue;
             
-            // Filter faces that aren't facing the camera
-            
-            normal.copy(n1).add(n2).add(n3).divideScalar(3).normalize();
-            rayDir.subVectors(centroid, cameraPos).normalize();
-            camDir.subVectors(cameraPos, centroid).normalize();
-            
-            if (normal.dot(camDir) <= this.normalThreshold) continue;
-            
             // Filter faces that are obstructed by other faces
-            
-            const maxDist = cameraPos.distanceTo(centroid);
-            
-            const ray = new THREE.Ray(cameraPos, rayDir);
-            const hit = geometry.boundsTree.raycastFirst(ray, THREE.SingleSide);
-            
-            if (hit && hit.distance < maxDist - 0.01) continue;
 
+            if (!this.selectObstructedFaces) {
+                const maxDist = cameraPos.distanceTo(centroid);
+                
+                rayDir.subVectors(centroid, cameraPos).normalize();
+                
+                const ray = new THREE.Ray(cameraPos, rayDir);
+                const hit = geometry.boundsTree.raycastFirst(ray, THREE.SingleSide);
+                
+                if (hit && hit.distance < maxDist - 0.01) continue;
+            }
+            
+            // Filter faces that aren't facing the camera
+
+            if (this.selectObstructedFaces) {
+                normal.copy(n1).add(n2).add(n3).divideScalar(3).normalize();
+                camDir.subVectors(cameraPos, centroid).normalize();
+                
+                if (normal.dot(camDir) <= this.normalThreshold) continue;
+            }
+            
             // Project to lasso polygon
 
             projected.copy(centroid).project(camera);
@@ -1202,24 +1207,25 @@ class Toolbox {
             
             // Filter faces that are obstructed by other faces
 
-            if (this.selectObstructedFaces) {}
-                // TODO
+            if (!this.selectObstructedFaces) {
+                const maxDist = cameraPos.distanceTo(centroid);
+                
+                rayDir.subVectors(centroid, cameraPos).normalize();
+                
+                const ray = new THREE.Ray(cameraPos, rayDir);
+                const hit = geometry.boundsTree.raycastFirst(ray, THREE.SingleSide);
+                
+                if (hit && hit.distance < maxDist - 0.01) continue;
+            }
             
-            const maxDist = cameraPos.distanceTo(centroid);
-            
-            rayDir.subVectors(centroid, cameraPos).normalize();
-            
-            const ray = new THREE.Ray(cameraPos, rayDir);
-            const hit = geometry.boundsTree.raycastFirst(ray, THREE.SingleSide);
-            
-            if (hit && hit.distance < maxDist - 0.01) continue;
-
             // Filter faces that aren't facing the camera
-            
-            normal.copy(n1).add(n2).add(n3).divideScalar(3).normalize();
-            camDir.subVectors(cameraPos, centroid).normalize();
-            
-            if (normal.dot(camDir) <= this.normalThreshold) continue;
+
+            if (this.selectObstructedFaces) {
+                normal.copy(n1).add(n2).add(n3).divideScalar(3).normalize();
+                camDir.subVectors(cameraPos, centroid).normalize();
+                
+                if (normal.dot(camDir) <= this.normalThreshold) continue;
+            }
             
             // Project to lasso polygon
 
@@ -1298,7 +1304,6 @@ class Toolbox {
 
 // TODO undo redo (with enableHistory) -> a history tab for each layer
 // TODO import other models and geometries
-// TODO add adjustable lasso frustum thresholds
 // TODO add normal thresholds to brush tool
 
 export {Brush, Lasso, Toolbox};
