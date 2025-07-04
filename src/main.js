@@ -94,51 +94,118 @@ function setupEventHandlers() {
 };
 
 function setupUI() {
-    // Create containers
-    const topRightContainer = document.createElement('div');
-    topRightContainer.id = 'uicanvastr';
-    topRightContainer.style.position = 'absolute';
-    topRightContainer.style.top = '50px';
-    topRightContainer.style.right = '50px';
-    topRightContainer.style.zIndex = '120';
-    document.body.appendChild(topRightContainer);
+    function topRightContainerSetup() {
+        
+        // Create container
+        const topRightContainer = document.createElement('div');
+        topRightContainer.id = 'uicanvastr';
+        topRightContainer.style.position = 'absolute';
+        topRightContainer.style.top = '50px';
+        topRightContainer.style.right = '50px';
+        topRightContainer.style.zIndex = '120';
+        document.body.appendChild(topRightContainer);
 
-    // Add toolbox pane
-    const toolboxPane = new Pane({
-        container: topRightContainer,
-        title: 'Toolbox',
-        expanded: true,
-    });
+        // Add toolbox pane
+        const toolboxPane = new Pane({
+            container: topRightContainer,
+            title: 'Toolbox',
+            expanded: true,
+        });
 
-    // Brush Button
-    const btnBrush = toolboxPane.addButton({
-        title: 'Brush',
-    });
-    btnBrush.on('click', () => {
-        toolbox.deactivateLasso();
-        toolbox.activateBrush();
-        controls.enabled = false;
-    });
+        // Brush Button
+        const btnBrush = toolboxPane.addButton({
+            title: 'Brush',
+        });
+        btnBrush.on('click', () => {
+            toolbox.deactivateLasso();
+            toolbox.activateBrush();
+            controls.enabled = false;
+        });
 
-    // Lasso Button
-    const btnLasso = toolboxPane.addButton({
-        title: 'Lasso',
-    });
-    btnLasso.on('click', () => {
-        toolbox.deactivateBrush();
-        toolbox.activateLasso();
-        controls.enabled = false;
-    });
+        // Lasso Button
+        const btnLasso = toolboxPane.addButton({
+            title: 'Lasso',
+        });
+        btnLasso.on('click', () => {
+            toolbox.deactivateBrush();
+            toolbox.activateLasso();
+            controls.enabled = false;
+        });
 
-    // None Button
-    const btnNone = toolboxPane.addButton({
-        title: 'None',
-    });
-    btnNone.on('click', () => {
-        toolbox.deactivateBrush();
-        toolbox.deactivateLasso();
-        controls.enabled = true;
-    });
+        // None Button
+        const btnNone = toolboxPane.addButton({
+            title: 'None',
+        });
+        btnNone.on('click', () => {
+            toolbox.deactivateBrush();
+            toolbox.deactivateLasso();
+            controls.enabled = true;
+        });
+    }
+
+    function middleRightContainerSetup() {
+        // Create container
+        const middleRightContainer = document.createElement('div');
+        middleRightContainer.id = 'uicanvastr';
+        middleRightContainer.style.position = 'absolute';
+        middleRightContainer.style.top = '180px';
+        middleRightContainer.style.right = '50px';
+        middleRightContainer.style.zIndex = '120';
+        document.body.appendChild(middleRightContainer);
+
+        // Add history pane
+        const histroyPane = new Pane({
+            container: middleRightContainer,
+            title: 'History',
+            expanded: true,
+        });
+
+        // Undo button
+        const btnUndo = histroyPane.addButton({
+            title: 'Undo',
+        });
+        btnUndo.on('click',  () => {
+            toolbox.undo();
+        });
+
+        // Redo button
+        const btnRedo = histroyPane.addButton({
+            title: 'Redo',
+        });
+        btnRedo.on('click',  () => {
+            toolbox.redo();
+        });
+    }
+
+    function bottomRightContainterSetup() {
+        
+        // Create container
+        const bottomRightContainter = document.createElement('div');
+        bottomRightContainter.id = 'uicanvasbr';
+        bottomRightContainter.style.position = 'absolute';
+        bottomRightContainter.style.bottom = '70px';
+        bottomRightContainter.style.right = '50px';
+        bottomRightContainter.style.zIndex = '120';
+        document.body.appendChild(bottomRightContainter);
+
+        // Add parameter pane 
+        const paramsPane = new Pane({
+            container: bottomRightContainter,
+            title: 'Parameters',
+            expanded: true
+        });
+
+        // Select Obstructed Faces button
+        paramsPane.addBinding(toolbox, 'selectObstructedFaces');
+        paramsPane.addBinding(toolbox, 'normalThreshold', {
+            min: -1, max: 1
+        });
+    }
+
+    topRightContainerSetup();
+    middleRightContainerSetup();
+    bottomRightContainterSetup();
+
 };
 
 function updateFromOptions() {

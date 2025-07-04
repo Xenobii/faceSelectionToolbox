@@ -12,8 +12,6 @@ THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
-import Utils from "./utils.js";
-
 
 class Tools {
     constructor(scene, camera, renderer, mesh, optParams) {
@@ -35,8 +33,10 @@ class Tools {
         this.initRC();
         this.initMeshMat();
         this.initEventListeners();
+        this.initHistory();
 
         this.currSelection = new Set();
+        this.enableHistory = true;
 
         this._bInitialized = true;
 
@@ -94,6 +94,12 @@ class Tools {
             colorAttr = new THREE.BufferAttribute(colorArray, 3);
             this.mesh.geometry.setAttribute('color', colorAttr);
         }
+    }
+
+    initHistory() {
+        this.historyIdx = 0;
+        this.undoStack  = [];
+        this.redoStack  = [];
     }
 
     _updateScreenMove(e) {
@@ -193,6 +199,47 @@ class Tools {
         });
     }
 
+    _addToHistory() {
+        const prevSelection = new Set(this.undoStack.pop());
+        const currSelection = new Set(this.currSelection);
+        
+        this.undoStack.push(prevSelection);
+
+        if (prevSelection.size !== currSelection.size) {
+            this.undoStack.push(currSelection);
+            this.redoStack = [];
+            this.historyIdx += 1;
+        }
+    }
+
+    undo() {
+        if (!this.enableHistory) return;
+
+        if (this.undoStack.length === 0) return;
+        
+        this.redoStack.push(new Set(this.currSelection));
+        this.currSelection = this.undoStack.pop();
+        
+        this.historyIdx -= 1;
+        
+        this._clearHighlights();
+        this._highlightFacesOnMesh(this.currSelection);
+    }
+
+    redo() {
+        if (!this.enableHistory) return;
+
+        if (this.redoStack.length === 0) return;
+
+        this.undoStack.push(new Set(this.currSelection));
+        this.currSelection = this.redoStack.pop();
+        
+        this.historyIdx += 1;
+        
+        this._clearHighlights();
+        this._highlightFacesOnMesh(this.currSelection);
+    }
+
     activate() {
         this.enabled = true;
     }
@@ -229,6 +276,8 @@ class Brush extends Tools {
 
         el.addEventListener('mousedown', (e) => {
             if (!this.enabled) return;
+
+            this._addToHistory();
             
             if (e.button === 0) this._brushActive();
             if (e.button === 2) this._eraserActive();
@@ -397,7 +446,11 @@ class Lasso extends Tools {
 
         el.addEventListener('mousedown', (e) => {
             if (!this.enabled) return;
+
+            this._addToHistory();
+
             el.style.cursor = 'crosshair';
+            
             if (e.button === 0 || e.button === 2) this._startLasso();
         })
         el.addEventListener('mousemove', (e) => {
@@ -669,11 +722,13 @@ class Toolbox {
         this.initRC();
         this.initMeshMat();
         this.initEventListeners();
+        this.initHistory();
 
         this.initBrush();
         this.initLasso();
 
         this.currSelection = new Set();
+        this.enableHistory = true;
 
         this._bInitialized = true;
 
@@ -735,6 +790,8 @@ class Toolbox {
         el.addEventListener('mousedown', (e) => {
             if (!this.brushEnabled) return;
             
+            this._addToHistory();
+
             if (e.button === 0) this._brushActive();
             if (e.button === 2) this._eraserActive();
         }, false);
@@ -770,6 +827,9 @@ class Toolbox {
 
         el.addEventListener('mousedown', (e) => {
             if (!this.lassoEnabled) return;
+
+            this._addToHistory();
+
             el.style.cursor = 'crosshair';
             if (e.button === 0 || e.button === 2) this._startLasso();
         })
@@ -853,6 +913,12 @@ class Toolbox {
         this.selectorMesh.scale.setScalar(this.selectorRadius);
         this.selectorMesh.visible = false;
         this.scene.add(this.selectorMesh);
+    }
+
+    initHistory() {
+        this.historyIdx = 0;
+        this.undoStack  = [];
+        this.redoStack  = [];
     }
 
     // onUpdate functions
@@ -1220,12 +1286,10 @@ class Toolbox {
             
             // Filter faces that aren't facing the camera
 
-            if (this.selectObstructedFaces) {
-                normal.copy(n1).add(n2).add(n3).divideScalar(3).normalize();
-                camDir.subVectors(cameraPos, centroid).normalize();
-                
-                if (normal.dot(camDir) <= this.normalThreshold) continue;
-            }
+            normal.copy(n1).add(n2).add(n3).divideScalar(3).normalize();
+            camDir.subVectors(cameraPos, centroid).normalize();
+            
+            if (normal.dot(camDir) <= this.normalThreshold) continue;
             
             // Project to lasso polygon
 
@@ -1295,6 +1359,49 @@ class Toolbox {
         this.lassoEnabled = false;
     }
 
+    // history
+
+    _addToHistory() {
+        const prevSelection = new Set(this.undoStack.pop());
+        const currSelection = new Set(this.currSelection);
+        
+        this.undoStack.push(prevSelection);
+
+        if (prevSelection.size !== currSelection.size) {
+            this.undoStack.push(currSelection);
+            this.redoStack = [];
+            this.historyIdx += 1;
+        }
+    }
+
+    undo() {
+        if (!this.enableHistory) return;
+
+        if (this.undoStack.length === 0) return;
+        
+        this.redoStack.push(new Set(this.currSelection));
+        this.currSelection = this.undoStack.pop();
+        
+        this.historyIdx -= 1;
+        
+        this._clearHighlights();
+        this._highlightFacesOnMesh(this.currSelection);
+    }
+    
+    redo() {
+        if (!this.enableHistory) return;
+
+        if (this.redoStack.length === 0) return;
+
+        this.undoStack.push(new Set(this.currSelection));
+        this.currSelection = this.redoStack.pop();
+        
+        this.historyIdx += 1;
+        
+        this._clearHighlights();
+        this._highlightFacesOnMesh(this.currSelection);
+    }
+
     // tool callback
 
     onSelectionEnd(callback) {
@@ -1302,8 +1409,8 @@ class Toolbox {
     }
 };
 
-// TODO undo redo (with enableHistory) -> a history tab for each layer
 // TODO import other models and geometries
 // TODO add normal thresholds to brush tool
+// TODO qol history
 
 export {Brush, Lasso, Toolbox};
