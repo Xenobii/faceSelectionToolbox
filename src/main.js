@@ -195,8 +195,14 @@ function setupUI() {
             expanded: true
         });
 
+        // Visibility Toggle
+        const visibilityToggle = paramsPane.addBinding(toolbox, 'visible');
+        visibilityToggle.on('change', () => toolbox.toggleHighlights());
+
         // Select Obstructed Faces button
         paramsPane.addBinding(toolbox, 'selectObstructedFaces');
+
+        // Normal Threshold slider
         paramsPane.addBinding(toolbox, 'normalThreshold', {
             min: -1, max: 1
         });

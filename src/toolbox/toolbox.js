@@ -37,9 +37,10 @@ class Tools {
 
         this.currSelection = new Set();
         this.enableHistory = true;
-
+        
         this._bInitialized = true;
-
+        
+        this.visible = true;
         this.enabled = false;
     }
     
@@ -143,7 +144,10 @@ class Tools {
     }
 
     _highlightFacesOnMesh(selectedFaces) {
+        if (!this.visible) return;
+        
         if (selectedFaces === undefined) return;
+        
         const colorAttr = this.mesh.geometry.attributes.color;
         const indexAttr = this.mesh.geometry.index;
 
@@ -246,6 +250,27 @@ class Tools {
 
     deactivate() {
         this.enabled = false;
+    }
+
+    changeHighlightColor(color) {
+        this.highlightColor = new THREE.Color(color);
+        this._highlightFacesOnMesh(this.currSelection);
+    }
+
+    toggleHighlights() {
+        if (this.visible)  this.disableHighlights();
+        if (!this.visible) this.enableHighlights();
+    }
+
+    enableHighlights() {
+        this.visible = true;
+        this._clearHighlights();
+        this._highlightFacesOnMesh(this.currSelection);
+    }
+
+    disableHighlights() {
+        this.visible = true;
+        this._clearHighlights();
     }
 };
 
@@ -731,7 +756,8 @@ class Toolbox {
         this.enableHistory = true;
 
         this._bInitialized = true;
-
+        
+        this.visible      = true;
         this.enabled      = false;
         this.brushEnabled = false;
         this.lassoEnabled = false;
@@ -985,7 +1011,10 @@ class Toolbox {
     }
 
     _highlightFacesOnMesh(selectedFaces) {
+        if (!this.visible) return;
+        
         if (selectedFaces === undefined) return;
+        
         const colorAttr = this.mesh.geometry.attributes.color;
         const indexAttr = this.mesh.geometry.index;
 
@@ -1359,12 +1388,32 @@ class Toolbox {
         this.lassoEnabled = false;
     }
 
+    changeHighlightcColor(color) {
+        this.highlightColor = new THREE.Color(color);
+        this._highlightFacesOnMesh(this.currSelection);
+    }
+
+    toggleHighlights() {
+        if (this.visible)  this.enableHighlights();
+        if (!this.visible) this.disableHighlights();
+    }
+
+    enableHighlights() {
+        this.visible = true;
+        this._clearHighlights();
+        this._highlightFacesOnMesh(this.currSelection);
+    }
+
+    disableHighlights() {
+        this.visible = true;
+        this._clearHighlights();
+    }
+
     // history
 
     _addToHistory() {
-        const prevSelection = new Set(this.undoStack.pop());
-        const currSelection = new Set(this.currSelection);
-        
+        if (!this.enableHistory) return;
+
         this.undoStack.push(prevSelection);
 
         if (prevSelection.size !== currSelection.size) {
@@ -1411,6 +1460,8 @@ class Toolbox {
 
 // TODO import other models and geometries
 // TODO add normal thresholds to brush tool
-// TODO qol history
+// TODO search for optimizations
+// TODO fix history
+// TODO fix color compatibiliity
 
 export {Brush, Lasso, Toolbox};

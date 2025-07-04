@@ -16,11 +16,31 @@ toolbox.activateBrush();
 toolbox.activateLasso();
 
 toolbox.onSelectionEnd((faces) => {
-    // Get faces as array
-    console.log(faces.length);
+    console.log(faces.length); 
 });
 
 ```
+## Activation
+```js
+toolbox.activate();   // Activate toolbox functionalities
+toolbox.deactivate(); // Deactivate toolbox functionalities
+```
 
-## License
-[MIT](https://choosealicense.com/licenses/mit/)
+## Visibility
+```js
+const color = "0x00ff00";
+toolbox.changeHighlightColor(color); // Change highlight color
+ 
+toolbox.enableHighlights();  // Display highlighted faces
+toolbox.disableHighlights(); // Hide highlighted faces
+
+// or
+
+toolbox.toggleHighlights(); // Toggle highlights (true/false)
+```
+
+## History
+```js
+toolbox.undo(); // Undo
+toolbox.redo(); // Redo
+```
